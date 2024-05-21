@@ -16,4 +16,4 @@ dependencies:
   - imageio
   - pip:
     - imageio-ffmpeg>=0.4.3
-    - pyspng
+    # - pyspng

@@ -17,9 +17,19 @@ import dnnlib
 
 #----------------------------------------------------------------------------
 
+
+def save_image(arr, gridh, gridw, net, path):
+    print(f'Saving image grid to {path}')
+    image = (arr * 127.5 + 128).clip(0, 255).to(torch.uint8)
+    image = image.reshape(gridh, gridw, *image.shape[1:]).permute(0, 3, 1, 4, 2)
+    image = image.reshape(gridh * net.img_resolution, gridw * net.img_resolution, net.img_channels)
+    image = image.cpu().numpy()
+    PIL.Image.fromarray(image, 'RGB').save(path)
+
+
 def generate_image_grid(
     network_pkl, dest_path,
-    seed=0, gridw=8, gridh=8, device=torch.device('cuda'),
+    seed=0, gridw=2, gridh=2, device=torch.device('cpu'),
     num_steps=18, sigma_min=0.002, sigma_max=80, rho=7,
     S_churn=0, S_min=0, S_max=float('inf'), S_noise=1,
 ):
@@ -34,6 +44,8 @@ def generate_image_grid(
     # Pick latents and labels.
     print(f'Generating {batch_size} images...')
     latents = torch.randn([batch_size, net.img_channels, net.img_resolution, net.img_resolution], device=device)
+    save_image(latents.to(torch.float64), gridh, gridw, net, f'{dest_path}-{seed}-in.png')
+
     class_labels = None
     if net.label_dim:
         class_labels = torch.eye(net.label_dim, device=device)[torch.randint(net.label_dim, size=[batch_size], device=device)]
@@ -68,23 +80,19 @@ def generate_image_grid(
             d_prime = (x_next - denoised) / t_next
             x_next = x_hat + (t_next - t_hat) * (0.5 * d_cur + 0.5 * d_prime)
 
-    # Save image grid.
-    print(f'Saving image grid to "{dest_path}"...')
-    image = (x_next * 127.5 + 128).clip(0, 255).to(torch.uint8)
-    image = image.reshape(gridh, gridw, *image.shape[1:]).permute(0, 3, 1, 4, 2)
-    image = image.reshape(gridh * net.img_resolution, gridw * net.img_resolution, net.img_channels)
-    image = image.cpu().numpy()
-    PIL.Image.fromarray(image, 'RGB').save(dest_path)
+    save_image(x_next, gridh, gridw, net, f'{dest_path}-{seed}-out.png')
     print('Done.')
 
 #----------------------------------------------------------------------------
 
 def main():
     model_root = 'https://nvlabs-fi-cdn.nvidia.com/edm/pretrained'
-    generate_image_grid(f'{model_root}/edm-cifar10-32x32-cond-vp.pkl',   'cifar10-32x32.png',  num_steps=18) # FID = 1.79, NFE = 35
-    generate_image_grid(f'{model_root}/edm-ffhq-64x64-uncond-vp.pkl',    'ffhq-64x64.png',     num_steps=40) # FID = 2.39, NFE = 79
-    generate_image_grid(f'{model_root}/edm-afhqv2-64x64-uncond-vp.pkl',  'afhqv2-64x64.png',   num_steps=40) # FID = 1.96, NFE = 79
-    generate_image_grid(f'{model_root}/edm-imagenet-64x64-cond-adm.pkl', 'imagenet-64x64.png', num_steps=256, S_churn=40, S_min=0.05, S_max=50, S_noise=1.003) # FID = 1.36, NFE = 511
+    # generate_image_grid(f'{model_root}/edm-cifar10-32x32-cond-vp.pkl',   'cifar10-32x32.png',  num_steps=18) # FID = 1.79, NFE = 35
+    generate_image_grid(f'{model_root}/edm-ffhq-64x64-uncond-vp.pkl',    'ffhq-64x64',     num_steps=40, seed=1) # FID = 2.39, NFE = 79
+    generate_image_grid(f'{model_root}/edm-ffhq-64x64-uncond-vp.pkl',    'ffhq-64x64',     num_steps=40, seed=2) # FID = 2.39, NFE = 79
+    generate_image_grid(f'{model_root}/edm-ffhq-64x64-uncond-vp.pkl',    'ffhq-64x64',     num_steps=40, seed=3) # FID = 2.39, NFE = 79
+    # generate_image_grid(f'{model_root}/edm-afhqv2-64x64-uncond-vp.pkl',  'afhqv2-64x64.png',   num_steps=40) # FID = 1.96, NFE = 79
+    # generate_image_grid(f'{model_root}/edm-imagenet-64x64-cond-adm.pkl', 'imagenet-64x64.png', num_steps=256, S_churn=40, S_min=0.05, S_max=50, S_noise=1.003) # FID = 1.36, NFE = 511
 
 #----------------------------------------------------------------------------
 
